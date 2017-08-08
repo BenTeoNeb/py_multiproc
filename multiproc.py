@@ -176,4 +176,15 @@ if __name__ == '__main__':
     print "Available number of procs :", NCPUS
     NPROCESSES = 10
 
+    print "############################################"
+    print "All jobs started at the same time. BANZAAAAI"
+    print "############################################"
+    multijobs(NPROCESSES)
+    print "############################################"
+    print "Start jobs by batches. Be reasonable."
+    print "############################################"
+    multijobs_batch(NPROCESSES, batch_size=NCPUS)
+    print "############################################"
+    print " WTF with pools"
+    print "############################################"
     multijobs_pool(NPROCESSES, ncpus=NCPUS)
