@@ -12,6 +12,11 @@ from multiprocessing import Process, Pool, Lock
 import multiprocessing
 
 
+def hello_world(pid):
+    print "hello world from pid: ", pid
+    sleep(1)
+    print " slept well from pid: ", pid 
+
 def do_work(complexity, pid, lock):
     """ Do something time consuming and locking at the end """
 
@@ -19,14 +24,12 @@ def do_work(complexity, pid, lock):
     result = 0
     print "--> Process:", pid, " ospid:", os.getpid(), " START"
     # Do something time consuming
-    for i in range(complexity):
-        result += 1 * (math.log(3.14**(1.2) / 14.3**(0.9)) /
-                       math.exp(0.314**(1.314) / 1.13))
+    time.sleep(complexity*2)
     # when finished do something locking
     # This means that only one worker can have the lock at the same time
     lock.acquire()
     print "--> Process:", pid, " ospid:", os.getpid(), " LOCKING"
-    time.sleep(1)
+    time.sleep(0.1)
     print "--> Process:", pid, " ospid:", os.getpid(), " time:", time.time() - start_time, " END"
     lock.release()
 
@@ -50,7 +53,7 @@ def multijobs(nprocesses):
     jobs_q = Queue()
     jobs = []
     for process in range(nprocesses):
-        job = Process(target=do_work, args=(int(random.random()), process, lock))
+        job = Process(target=do_work, args=(random.random(), process, lock))
         jobs_q.put(job)
         jobs.append(job)
 
@@ -75,7 +78,7 @@ def multijobs(nprocesses):
 
     # print some infos
     print "---- Master ----"
-    print "The job took " + str(work_time) + " seconds to complete"
+    print "The jobs took " + str(work_time) + " seconds to complete"
 
 
 def multijobs_batch(nprocesses, batch_size):
@@ -84,6 +87,8 @@ def multijobs_batch(nprocesses, batch_size):
     to finish, submitting another batch and
     so on until there are no more jobs to
     perform.
+    So in this case the number of simultaneous
+    jobs is between 1 and the batch size.
     """
 
     lock = Lock()
@@ -99,7 +104,7 @@ def multijobs_batch(nprocesses, batch_size):
     jobs_q = Queue()
     jobs = []
     for process in range(nprocesses):
-        job = Process(target=do_work, args=(int(random.random()), process, lock))
+        job = Process(target=do_work, args=(random.random(), process, lock))
         jobs_q.put(job)
         jobs.append(job)
 
@@ -129,12 +134,46 @@ def multijobs_batch(nprocesses, batch_size):
 
     # print some infos
     print "---- Master ----"
-    print "The job took " + str(work_time) + " seconds to complete"
+    print "The jobs took " + str(work_time) + " seconds to complete"
 
+def multijobs_pool(nprocesses, ncpus):
+    """ Do some parallel work by submitting
+    jobs with a max number of simultaneous
+    jobs always set to the number of cpus
+    until there are no more jobs to perform.
+    """
+
+    lock = Lock()
+
+    # mark the start time
+    start_time = time.time()
+
+    # create a process Pool with N processes
+    pool = Pool(processes=ncpus)
+
+    print "---- Pool mode ----"
+    for process in range(nprocesses):
+        print "launching pid:", process
+        # J AI PAS COMPRIS
+        pool.apply_async(hello_world, args=(process,))
+
+    print "---- close pool ----"
+    pool.close()
+    print "---- blocking ----"
+    pool.join()
+
+    # mark the end time
+    end_time = time.time()
+    # calculate the total time it took to complete the work
+    work_time = end_time - start_time
+
+    # print some infos
+    print "---- Master ----"
+    print "The jobs took " + str(work_time) + " seconds to complete"
 
 if __name__ == '__main__':
     NCPUS = multiprocessing.cpu_count()
     print "Available number of procs :", NCPUS
     NPROCESSES = 10
 
-    multijobs_batch(NPROCESSES, batch_size=NCPUS)
+    multijobs_pool(NPROCESSES, ncpus=NCPUS)
