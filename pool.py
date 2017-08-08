@@ -3,6 +3,7 @@ import os
 import sys
 import random
 import math
+from Queue import Queue
 from multiprocessing import Process, Pool, Lock
 import multiprocessing
 
@@ -38,18 +39,26 @@ if __name__ == '__main__':
     pool = Pool(processes=nprocesses)
 
     print "---- Prepare all the jobs ----"
+    # Put all the jobs to be done in a queue
+    jobs_q = Queue()
     jobs = []
     for p in range(nprocesses):
          job = Process(target=doWork, args=(int(random.random()), p, lock))
+         jobs_q.put(job)
          jobs.append(job)
 
     print "---- Launch jobs ----"
-    for job in jobs:
+    # Launch jobs and put launched jobs in another queue
+    jobs_started_q = Queue()
+    while not jobs_q.empty():
+         job = jobs_q.get()
          job.start()
+         jobs_started_q.put(job)
 
-    # Block master until all jobs are done
-    for job in jobs:
-        job.join() # Block the calling thread (here master) until the job is finished
+    # Block master until all started jobs are done
+    while not jobs_started_q.empty():
+        job = jobs_started_q.get()
+        job.join() # join: Block the calling thread (here master) until the job is finished
              
     #mark the end time
     endTime = time.time()
