@@ -28,32 +28,12 @@ def do_work(complexity, pid, lock):
     print "--> Process:", pid, " ospid:", os.getpid(), " time:", time.time() - start_time, " END"
     lock.release()
 
-
-def multijobs(nprocesses):
+def run_all(jobs_q):
     """ Do some parallel work by submitting
     all the jobs at the same time, with no
     regard to the number of cores availables.
     """
 
-    lock = Lock()
-
-    # mark the start time
-    start_time = time.time()
-
-    # create a process Pool with N processes
-    #pool = Pool(processes=nprocesses)
-
-    print "---- Prepare all the jobs ----"
-    # Put all the jobs to be done in a queue
-    jobs_q = Queue()
-    jobs = []
-    for process in range(nprocesses):
-        job = Process(target=do_work, args=(random.random(), process, lock))
-        jobs_q.put(job)
-        jobs.append(job)
-
-    # Batch mode
-    print "---- Launch " + str(nprocesses) +" jobs ----"
     jobs_started_q = Queue()
     # Go as long as there are jobs to do
     while not jobs_q.empty():
@@ -66,17 +46,7 @@ def multijobs(nprocesses):
         job = jobs_started_q.get()
         job.join()  # join: Block the calling thread (here master) until the job is finished
 
-    # mark the end time
-    end_time = time.time()
-    # calculate the total time it took to complete the work
-    work_time = end_time - start_time
-
-    # print some infos
-    print "---- Master ----"
-    print "The jobs took " + str(work_time) + " seconds to complete"
-
-
-def multijobs_batch(nprocesses, batch_size):
+def run_batch(jobs_q, batch_size=multiprocessing.cpu_count()):
     """ Do some parallel work by submitting
     a batch of jobs, waiting for this batch
     to finish, submitting another batch and
@@ -84,78 +54,39 @@ def multijobs_batch(nprocesses, batch_size):
     perform.
     So in this case the number of simultaneous
     jobs is between 1 and the batch size.
+    INPUTS:
+        - jobs: queue of processes
+        - batch_size, optional: max number of alive processes
+                                default to number of cpus
     """
-
-    lock = Lock()
-
-    # mark the start time
-    start_time = time.time()
-
-    # create a process Pool with N processes
-    #pool = Pool(processes=nprocesses)
-
-    print "---- Prepare all the jobs ----"
-    # Put all the jobs to be done in a queue
-    jobs_q = Queue()
-    jobs = []
-    for process in range(nprocesses):
-        job = Process(target=do_work, args=(random.random(), process, lock))
-        jobs_q.put(job)
-        jobs.append(job)
-
     # Batch mode
-    print "---- Launch " + str(nprocesses) +" jobs ----"
     jobs_started_q = Queue()
     # Go as long as there are jobs to do
     while not jobs_q.empty():
 
-        print " --> Launching a batch of max " + str(batch_size) + " jobs"
         # Launch jobs by batch and put launched jobs in another queue
         while not jobs_q.empty() and jobs_started_q.qsize() != batch_size:
             job = jobs_q.get()
             job.start()
             jobs_started_q.put(job)
 
-        print " --> Launched " + str(jobs_started_q.qsize()) + " jobs"
         # Block master until all started jobs are done
         while not jobs_started_q.empty():
             job = jobs_started_q.get()
             job.join()  # join: Block the calling thread (here master) until the job is finished
 
-    # mark the end time
-    end_time = time.time()
-    # calculate the total time it took to complete the work
-    work_time = end_time - start_time
-
-    # print some infos
-    print "---- Master ----"
-    print "The jobs took " + str(work_time) + " seconds to complete"
-
-def multijobs_full_batch(nprocesses, batch_size):
+def run_full_batch(jobs_q, batch_size=multiprocessing.cpu_count()):
     """ Do some parallel work by submitting
     a batch of jobs, and when one job is finished
     submit another so that the batch of jobs is
     always full.
     So in this case the number of
     jobs is always the batch size.
+    INPUTS:
+        - jobs: queue of processes
+        - batch_size, optional: max number of alive processes
+                                default to number of cpus
     """
-
-    lock = Lock()
-
-    # mark the start time
-    start_time = time.time()
-
-    print "---- Prepare all the jobs ----"
-    # Put all the jobs to be done in a queue
-    jobs_q = Queue()
-    jobs = []
-    for process in range(nprocesses):
-        job = Process(target=do_work, args=(random.random(), process, lock))
-        jobs_q.put(job)
-        jobs.append(job)
-
-    # Batch mode
-    print "---- Launch " + str(nprocesses) +" jobs ----"
     jobs_alive = {}
     all_jobs_done = False
     # Go as long as there are jobs to do
@@ -176,8 +107,6 @@ def multijobs_full_batch(nprocesses, batch_size):
             job = jobs_q.get()
             job.start()
             jobs_alive[job.pid] = job
-            print " --> Launched one job."
-            print " --> Alive jobs: " + str(len(jobs_alive))
 
         # Everything is finished if all jobs have been
         # submitted and no job is alive.
@@ -185,6 +114,31 @@ def multijobs_full_batch(nprocesses, batch_size):
             all_jobs_done = True
 
         time.sleep(0.01)
+
+def multijobs(nprocesses, batch_size):
+    """ Do some parallel work by submitting
+    a batch of jobs, and when one job is finished
+    submit another so that the batch of jobs is
+    always full.
+    So in this case the number of
+    jobs is always the batch size.
+    """
+
+    lock = Lock()
+
+    # mark the start time
+    start_time = time.time()
+
+    print "---- Prepare all the jobs ----"
+    # Put all the jobs to be done in a queue
+    jobs_q = Queue()
+    for process in range(nprocesses):
+        job = Process(target=do_work, args=(random.random(), process, lock))
+        jobs_q.put(job)
+
+    #run_all(jobs_q)
+    #run_batch(jobs_q)
+    run_full_batch(jobs_q)
 
     # mark the end time
     end_time = time.time()
@@ -201,14 +155,4 @@ if __name__ == '__main__':
     NPROCESSES = 10
 
     print "############################################"
-    print "All jobs started at the same time. BANZAAAAI"
-    print "############################################"
-    multijobs(NPROCESSES)
-    print "############################################"
-    print "Start jobs by batches. Be reasonable."
-    print "############################################"
-    multijobs_batch(NPROCESSES, batch_size=NCPUS)
-    print "############################################"
-    print "Start jobs in an always full batch."
-    print "############################################"
-    multijobs_full_batch(NPROCESSES, batch_size=NCPUS)
+    multijobs(NPROCESSES, batch_size=NCPUS)
