@@ -116,12 +116,10 @@ def run_full_batch(jobs_q, batch_size=multiprocessing.cpu_count()):
         time.sleep(0.01)
 
 def multijobs(nprocesses, batch_size):
-    """ Do some parallel work by submitting
-    a batch of jobs, and when one job is finished
-    submit another so that the batch of jobs is
-    always full.
-    So in this case the number of
-    jobs is always the batch size.
+    """ Prepare processes to be executed.
+    Call a function to run those processes
+    using multiprocessing.
+    Measure time.
     """
 
     lock = Lock()
