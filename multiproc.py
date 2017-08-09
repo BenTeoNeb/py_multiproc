@@ -8,14 +8,9 @@ import sys
 import random
 import math
 from Queue import Queue
-from multiprocessing import Process, Pool, Lock
+from multiprocessing import Process, Pool, Lock, JoinableQueue
 import multiprocessing
 
-
-def hello_world(pid):
-    print "hello world from pid: ", pid
-    sleep(1)
-    print " slept well from pid: ", pid 
 
 def do_work(complexity, pid, lock):
     """ Do something time consuming and locking at the end """
@@ -136,11 +131,13 @@ def multijobs_batch(nprocesses, batch_size):
     print "---- Master ----"
     print "The jobs took " + str(work_time) + " seconds to complete"
 
-def multijobs_pool(nprocesses, ncpus):
+def multijobs_full_batch(nprocesses, batch_size):
     """ Do some parallel work by submitting
-    jobs with a max number of simultaneous
-    jobs always set to the number of cpus
-    until there are no more jobs to perform.
+    a batch of jobs, and when one job is finished
+    submit another so that the batch of jobs is
+    always full.
+    So in this case the number of
+    jobs is always the batch size.
     """
 
     lock = Lock()
@@ -148,19 +145,46 @@ def multijobs_pool(nprocesses, ncpus):
     # mark the start time
     start_time = time.time()
 
-    # create a process Pool with N processes
-    pool = Pool(processes=ncpus)
-
-    print "---- Pool mode ----"
+    print "---- Prepare all the jobs ----"
+    # Put all the jobs to be done in a queue
+    jobs_q = Queue()
+    jobs = []
     for process in range(nprocesses):
-        print "launching pid:", process
-        # J AI PAS COMPRIS
-        pool.apply_async(hello_world, args=(process,))
+        job = Process(target=do_work, args=(random.random(), process, lock))
+        jobs_q.put(job)
+        jobs.append(job)
 
-    print "---- close pool ----"
-    pool.close()
-    print "---- blocking ----"
-    pool.join()
+    # Batch mode
+    print "---- Launch " + str(nprocesses) +" jobs ----"
+    jobs_alive = {}
+    all_jobs_done = False
+    # Go as long as there are jobs to do
+    while not all_jobs_done:
+
+        # Check if some started jobs are finished
+        done_jobs = []
+        for pid, jobs in jobs_alive.iteritems():
+            if not jobs.is_alive():
+                done_jobs.append(pid)
+        for done_job in done_jobs:
+            jobs_alive.pop(done_job)
+
+        # Submit one job if the number of alive jobs is
+        # below the limit of batch size
+        # and if there are still jobs to submit.
+        if len(jobs_alive) < batch_size and not jobs_q.empty():
+            job = jobs_q.get()
+            job.start()
+            jobs_alive[job.pid] = job
+            print " --> Launched one job."
+            print " --> Alive jobs: " + str(len(jobs_alive))
+
+        # Everything is finished if all jobs have been
+        # submitted and no job is alive.
+        if jobs_q.empty() and len(jobs_alive) == 0:
+            all_jobs_done = True
+
+        time.sleep(0.01)
 
     # mark the end time
     end_time = time.time()
@@ -185,6 +209,6 @@ if __name__ == '__main__':
     print "############################################"
     multijobs_batch(NPROCESSES, batch_size=NCPUS)
     print "############################################"
-    print " WTF with pools"
+    print "Start jobs in an always full batch."
     print "############################################"
-    multijobs_pool(NPROCESSES, ncpus=NCPUS)
+    multijobs_full_batch(NPROCESSES, batch_size=NCPUS)
